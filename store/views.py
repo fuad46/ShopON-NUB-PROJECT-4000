@@ -6,10 +6,26 @@ from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
 from .forms import SignUpForm, UpdateUserForm, ChangePasswordForm, UserInfoForm
 from django import forms
+from django.db.models import Q
+import json
+from cart.cart import Cart
 
 # Create your views here.
 
 
+def search(request):
+    if request.method == "POST":
+        searched = request.POST['searched']
+        # query db
+        searched = Product.objects.filter(Q(name__icontains=searched) | Q(description__icontains=searched))
+
+        if not searched:
+            messages.success(request, "No Matched Product")
+            return render(request, "search.html", {})
+        else:
+            return render(request, "search.html", {'searched':searched})
+    else:
+        return render(request, "search.html", {})
 
 def update_info(request):
     if request.user.is_authenticated:
@@ -94,9 +110,21 @@ def login_user(request):
          password = request.POST['password']
          user = authenticate(request, username=username, password=password)
          if user is not None:
-             login(request, user)
-             messages.success(request, ("You Have Been Logged In"))
-             return redirect('home')
+            login(request, user)
+            current_user = Profile.objects.get(user__id=request.user.id)
+            saved_cart= current_user.old_cart
+        #  convert db str to pytho dict 
+            if saved_cart:
+                converted_cart = json.loads(saved_cart)
+                # add loaded cart to session 
+                # get the cart 
+                cart = Cart(request)
+                # loop cart add item from data base
+                for key,value in converted_cart.items():
+                    cart.db_add(product=key, quantity=value)
+
+            messages.success(request, ("You Have Been Logged In"))
+            return redirect('home')
          else:
               messages.success(request, ("Error Try Again."))
               return redirect('login')
